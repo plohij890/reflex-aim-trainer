@@ -1,6 +1,7 @@
 import type { Route, Tab } from '../../router'
 import type { ModeId } from '../records'
 import type { GameMode } from '../types'
+import { createReflexSimple } from './reflexSimple'
 
 export interface ModeInfo {
   id: ModeId
@@ -71,6 +72,20 @@ export function modeIdForRoute(route: Route): ModeId | null {
   return BY_ROUTE.get(route) ?? null
 }
 
-export function getMode(_id: ModeId): GameMode | null {
-  return null
+const MODE_FACTORIES: Partial<Record<ModeId, () => GameMode>> = {
+  reflexSimple: createReflexSimple,
+}
+
+const instances = new Map<ModeId, GameMode>()
+
+export function getMode(id: ModeId): GameMode | null {
+  const existing = instances.get(id)
+  if (existing) return existing
+
+  const factory = MODE_FACTORIES[id]
+  if (!factory) return null
+
+  const mode = factory()
+  instances.set(id, mode)
+  return mode
 }
