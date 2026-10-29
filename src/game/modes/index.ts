@@ -3,6 +3,7 @@ import type { ModeId } from '../records'
 import type { GameMode } from '../types'
 import { createReflexSimple } from './reflexSimple'
 import { createReflexChoice } from './reflexChoice'
+import { createReflexGoNoGo } from './reflexGoNoGo'
 
 export interface ModeInfo {
   id: ModeId
@@ -76,6 +77,7 @@ export function modeIdForRoute(route: Route): ModeId | null {
 const MODE_FACTORIES: Partial<Record<ModeId, () => GameMode>> = {
   reflexSimple: createReflexSimple,
   reflexChoice: createReflexChoice,
+  reflexGoNoGo: createReflexGoNoGo,
 }
 
 const instances = new Map<ModeId, GameMode>()
