@@ -1,6 +1,8 @@
 export type Tab = 'reflex' | 'aim'
 
 export type Route =
+  | 'reflex'
+  | 'aim'
   | 'reflex/simple'
   | 'reflex/choice'
   | 'reflex/gonogo'
@@ -9,11 +11,13 @@ export type Route =
   | 'aim/recoil'
 
 export const TAB_HOME: Record<Tab, Route> = {
-  reflex: 'reflex/simple',
-  aim: 'aim/gridshot',
+  reflex: 'reflex',
+  aim: 'aim',
 }
 
 const ROUTES: readonly string[] = [
+  'reflex',
+  'aim',
   'reflex/simple',
   'reflex/choice',
   'reflex/gonogo',
@@ -27,9 +31,9 @@ function isRoute(value: string): value is Route {
 }
 
 export function parseHash(hash: string): Route | null {
-  const [, tab, mode] = /^#\/([\w-]+)\/([\w-]+)$/.exec(hash) ?? []
-  if (!tab || !mode) return null
-  const route = `${tab}/${mode}`
+  const [, tab, mode] = /^#\/([\w-]+)(?:\/([\w-]+))?$/.exec(hash) ?? []
+  if (!tab) return null
+  const route = mode ? `${tab}/${mode}` : tab
   return isRoute(route) ? route : null
 }
 

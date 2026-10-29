@@ -54,7 +54,7 @@ const MODE_BY_ROUTE = new Map<Route, ModeMeta>(
 )
 
 function tabOf(route: Route): Tab {
-  return route.startsWith('reflex/') ? 'reflex' : 'aim'
+  return route.startsWith('reflex') ? 'reflex' : 'aim'
 }
 
 function renderHeader(activeTab: Tab): HTMLElement {
@@ -110,7 +110,7 @@ function render(route: Route | null): void {
   const tab = tabOf(route)
   app.replaceChildren(
     renderHeader(tab),
-    route === TAB_HOME[tab] ? renderModeList(tab) : renderModeScreen(route),
+    route === tab ? renderModeList(tab) : renderModeScreen(route),
   )
 }
 
