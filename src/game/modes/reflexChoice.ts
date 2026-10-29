@@ -1,21 +1,32 @@
-import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
+import { capturePointer, createCanvas, pointerPosition, releasePointer, startLoop } from '../engine'
 import type { ReflexChoiceSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const NEUTRAL = '#1f2937'
 const STIMULUS = '#22c55e'
+const HOME_FILL = '#151b24'
+const HOME_RING = '#4c9aff'
+const HOME_RING_READY = '#22c55e'
+const HOME_DOT = '#2b3648'
 
 const PADDING = 20
 const GAP = 8
 const DELAY_MIN = 800
 const DELAY_MAX = 2000
+const HOME_RADIUS_MIN = 48
+const HOME_RADIUS_RATIO = 0.16
 
 interface Rect {
   x: number
   y: number
   width: number
   height: number
+}
+
+interface Vec {
+  x: number
+  y: number
 }
 
 const GRID: Record<ReflexChoiceSettings['zones'], { rows: number; cols: number }> = {
@@ -50,21 +61,41 @@ function contains(rect: Rect, x: number, y: number): boolean {
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height
 }
 
+function homeRadius(width: number, height: number): number {
+  return Math.max(HOME_RADIUS_MIN, Math.min(width, height) * HOME_RADIUS_RATIO)
+}
+
 function startSession(
   container: HTMLElement,
   config: ReflexChoiceSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
   const reactions: number[] = []
   let errors = 0
-  let phase: 'waiting' | 'stimulus' = 'waiting'
+  let phase: 'return' | 'waiting' | 'stimulus' = 'return'
   let stimulusAt = 0
   let nextStimulusAt = 0
   let activeZone = 0
+  let pointer: Vec | null = null
   let finished = false
   let accumulated = 0
+
+  function home(): Vec & { radius: number } {
+    const width = canvas.clientWidth
+    const height = canvas.clientHeight
+
+    return { x: width / 2, y: height / 2, radius: homeRadius(width, height) }
+  }
+
+  function isHome(point: Vec | null): boolean {
+    if (!point) return false
+
+    const center = home()
+    return Math.hypot(point.x - center.x, point.y - center.y) <= center.radius
+  }
 
   function scheduleNext(now: number): void {
     phase = 'waiting'
@@ -87,6 +118,26 @@ function startSession(
       ctx.fillStyle = highlighted ? STIMULUS : NEUTRAL
       ctx.fillRect(zone.x, zone.y, zone.width, zone.height)
     }
+
+    // Стартовая зона: круг в центре вырезает дуги в прямоугольниках.
+    const center = home()
+    ctx.fillStyle = HOME_FILL
+    ctx.beginPath()
+    ctx.arc(center.x, center.y, center.radius, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Кольцо подсвечивается, когда курсор находится в стартовой зоне.
+    const ready = isHome(pointer)
+    ctx.strokeStyle = ready ? HOME_RING_READY : HOME_RING
+    ctx.lineWidth = ready ? 5 : 3
+    ctx.beginPath()
+    ctx.arc(center.x, center.y, center.radius, 0, Math.PI * 2)
+    ctx.stroke()
+
+    ctx.fillStyle = ready ? HOME_RING_READY : HOME_DOT
+    ctx.beginPath()
+    ctx.arc(center.x, center.y, 6, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   function buildResult(): GameResult {
@@ -121,8 +172,12 @@ function startSession(
     if (finished) return
 
     capturePointer(canvas, event)
+    pointer = pointerPosition(canvas, event)
 
     const now = performance.now()
+
+    // Возврат в центр не оценивается: клик здесь только фиксирует курсор.
+    if (phase === 'return') return
 
     if (phase === 'waiting') {
       errors += 1
@@ -134,14 +189,18 @@ function startSession(
     const zones = layoutZones(canvas.clientWidth, canvas.clientHeight, config.zones)
     const zone = zones[activeZone]
 
-    if (zone && contains(zone, event.offsetX, event.offsetY)) {
+    if (zone && !isHome(pointer) && contains(zone, pointer.x, pointer.y)) {
       reactions.push(now - stimulusAt)
     } else {
       errors += 1
     }
 
-    scheduleNext(now)
+    phase = 'return'
     render()
+  }
+
+  function onPointerMove(event: PointerEvent): void {
+    pointer = pointerPosition(canvas, event)
   }
 
   function onPointerRelease(event: PointerEvent): void {
@@ -155,19 +214,24 @@ function startSession(
     onResult(buildResult())
   }
 
-  scheduleNext(performance.now())
   canvas.addEventListener('pointerdown', onPointerDown)
+  window.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerRelease)
   canvas.addEventListener('pointercancel', onPointerRelease)
 
   const stopLoop = startLoop((dt, now) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
     }
 
-    if (phase === 'waiting' && now >= nextStimulusAt) {
+    // Следующий стимул появляется только после возврата курсора в стартовую зону.
+    if (phase === 'return' && isHome(pointer)) {
+      scheduleNext(now)
+    } else if (phase === 'waiting' && now >= nextStimulusAt) {
       phase = 'stimulus'
       stimulusAt = now
       activeZone = Math.floor(Math.random() * config.zones)
@@ -180,6 +244,7 @@ function startSession(
     finished = true
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
+    window.removeEventListener('pointermove', onPointerMove)
     canvas.removeEventListener('pointerup', onPointerRelease)
     canvas.removeEventListener('pointercancel', onPointerRelease)
     destroy()
@@ -192,9 +257,9 @@ export function createReflexChoice(): GameMode {
   return {
     id: 'reflexChoice',
     title: 'Choice Reaction',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as ReflexChoiceSettings, onResult)
+      teardown = startSession(container, settings as ReflexChoiceSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()

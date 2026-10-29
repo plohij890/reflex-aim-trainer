@@ -89,6 +89,43 @@ function actionsRow(...buttons: HTMLButtonElement[]): HTMLElement {
   return row
 }
 
+interface Hud {
+  root: HTMLElement
+  update: (elapsed: number, duration: number) => void
+}
+
+function createHud(): Hud {
+  const root = document.createElement('div')
+  root.className = 'hud'
+
+  const track = document.createElement('div')
+  track.className = 'hud-track'
+
+  const fill = document.createElement('div')
+  fill.className = 'hud-fill'
+  track.append(fill)
+
+  const time = document.createElement('span')
+  time.className = 'hud-time'
+
+  root.append(track, time)
+
+  let lastSecond = -1
+
+  const update = (elapsed: number, duration: number): void => {
+    const fraction = duration > 0 ? Math.min(Math.max(elapsed / duration, 0), 1) : 0
+    fill.style.width = `${(fraction * 100).toFixed(2)}%`
+
+    const secondsLeft = Math.max(0, Math.ceil(duration - elapsed))
+    if (secondsLeft !== lastSecond) {
+      lastSecond = secondsLeft
+      time.textContent = `${secondsLeft} s`
+    }
+  }
+
+  return { root, update }
+}
+
 export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
   const info = getModeInfo(modeId)
   if (!info) return
@@ -158,12 +195,16 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
 
     container.replaceChildren()
 
+    const hud = createHud()
     const stage = document.createElement('div')
     stage.className = 'stage'
-    container.append(stage)
+    container.append(hud.root, stage)
 
     const handle = createCanvas(stage)
     canvasHandle = handle
+
+    const { duration } = loadSettings()[modeId]
+    hud.update(0, duration)
 
     let elapsed = 0
 
@@ -173,7 +214,7 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
 
       if (left <= 0) {
         teardown()
-        runMode()
+        runMode(hud)
         return
       }
 
@@ -183,7 +224,7 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
     })
   }
 
-  function runMode(): void {
+  function runMode(hud: Hud): void {
     const mode = getMode(modeId)
     if (!mode) {
       showResult()
@@ -194,10 +235,10 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
 
     const stage = document.createElement('div')
     stage.className = 'stage'
-    container.append(stage)
+    container.append(hud.root, stage)
 
     mounted = mode
-    mode.mount(stage, loadSettings()[modeId], handleResult)
+    mode.mount(stage, loadSettings()[modeId], handleResult, hud.update)
   }
 
   function handleResult(r: GameResult): void {

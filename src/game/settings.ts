@@ -30,9 +30,8 @@ export interface AimPathSettings {
   duration: number
   ballRadius: number
   startRadius: number
-  pathSpeed: number
   pathLength: number
-  pathShape: 'line' | 'curve' | 'zigzag' | 'random'
+  pathShape: 'horizontal' | 'vertical' | 'diagonal' | 'arc' | 'curve' | 'zigzag' | 'random'
   curveAmount: number
 }
 
@@ -87,9 +86,8 @@ export const DEFAULT_SETTINGS: Settings = {
     duration: 30,
     ballRadius: 25,
     startRadius: 40,
-    pathSpeed: 150,
     pathLength: 400,
-    pathShape: 'curve',
+    pathShape: 'random',
     curveAmount: 0.5,
   },
   aimRecoil: {
@@ -101,8 +99,8 @@ export const DEFAULT_SETTINGS: Settings = {
     respawnDelay: 0.7,
     v0: 120,
     tau: 1.5,
-    wobbleAmp: 40,
-    wobbleFreq: 2.5,
+    wobbleAmp: 60,
+    wobbleFreq: 0.4,
     wobbleGrow: 2.0,
     pattern: 'up_then_down',
   },

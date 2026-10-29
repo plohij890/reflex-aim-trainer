@@ -1,6 +1,6 @@
 import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { ReflexGoNoGoSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const GO_COLOR = '#22c55e'
@@ -20,6 +20,7 @@ function startSession(
   container: HTMLElement,
   config: ReflexGoNoGoSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
@@ -127,6 +128,8 @@ function startSession(
 
   const stopLoop = startLoop((dt, now) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
@@ -166,9 +169,9 @@ export function createReflexGoNoGo(): GameMode {
   return {
     id: 'reflexGoNoGo',
     title: 'Go / No-Go',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as ReflexGoNoGoSettings, onResult)
+      teardown = startSession(container, settings as ReflexGoNoGoSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()

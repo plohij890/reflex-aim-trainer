@@ -12,9 +12,16 @@ export interface GameContext {
   onResult: (r: GameResult) => void
 }
 
+export type ProgressHandler = (elapsed: number, duration: number) => void
+
 export interface GameMode {
   id: string
   title: string
-  mount(container: HTMLElement, settings: unknown, onResult: (r: GameResult) => void): void
+  mount(
+    container: HTMLElement,
+    settings: unknown,
+    onResult: (r: GameResult) => void,
+    onProgress?: ProgressHandler,
+  ): void
   unmount(): void
 }

@@ -1,6 +1,6 @@
 import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { ReflexSimpleSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const STIMULUS = '#22c55e'
@@ -21,6 +21,7 @@ function startSession(
   container: HTMLElement,
   config: ReflexSimpleSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
@@ -108,6 +109,8 @@ function startSession(
 
   const stopLoop = startLoop((dt, now) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
@@ -137,9 +140,9 @@ export function createReflexSimple(): GameMode {
   return {
     id: 'reflexSimple',
     title: 'Simple Reaction',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as ReflexSimpleSettings, onResult)
+      teardown = startSession(container, settings as ReflexSimpleSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()

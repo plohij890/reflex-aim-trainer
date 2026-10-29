@@ -1,6 +1,6 @@
 import { capturePointer, createCanvas, pointerPosition, releasePointer, startLoop } from '../engine'
 import type { AimRecoilSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const TARGET_COLOR = '#e6edf3'
@@ -10,6 +10,8 @@ const BAR_RADIUS = 3
 const BAR_OFFSET = 14
 const PEAK_TAU_FACTOR = 2
 const FALL_SPEED_FACTOR = 0.3
+const RISE_SHARE = 0.35
+const MAX_WOBBLE_GROWTH = 1.5
 
 type Pattern = 'up' | 'up_then_down'
 
@@ -70,6 +72,7 @@ function startSession(
   container: HTMLElement,
   config: AimRecoilSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
@@ -121,26 +124,28 @@ function startSession(
   }
 
   function verticalOffset(pattern: Pattern, seconds: number): number {
-    const peakTime = PEAK_TAU_FACTOR * config.tau
     const riseDistance = config.v0 * config.tau * (1 - Math.exp(-PEAK_TAU_FACTOR))
-    const rise = (time: number): number => config.v0 * config.tau * (1 - Math.exp(-time / config.tau))
 
     if (pattern === 'up') {
-      return -rise(seconds)
+      return -config.v0 * config.tau * (1 - Math.exp(-seconds / config.tau))
     }
 
-    // up_then_down: подъём, спуск до уровня старта и новый цикл.
-    // Так цель не уходит в бесконечный минус и не залипает у нижней границы.
-    const fallSpeed = FALL_SPEED_FACTOR * config.v0
-    const cycleDuration = peakTime + riseDistance / fallSpeed
-    const cycleTime = seconds % cycleDuration
+    // up_then_down: плавный цикл «вверх — вниз» без рывков на разворотах.
+    // Фаза искажается так, чтобы подъём занимал RISE_SHARE цикла, а спуск — остаток:
+    // скорость на обоих разворотах нулевая, поэтому цель не «трясётся» и не залипает.
+    const fallDuration = riseDistance / (FALL_SPEED_FACTOR * config.v0)
+    const cycleDuration = fallDuration / (1 - RISE_SHARE)
+    const warpExponent = Math.log(0.5) / Math.log(RISE_SHARE)
+    const phase = (seconds % cycleDuration) / cycleDuration
+    const warped = Math.pow(phase, warpExponent)
 
-    if (cycleTime <= peakTime) return -rise(cycleTime)
-    return -riseDistance + fallSpeed * (cycleTime - peakTime)
+    return (-riseDistance * (1 - Math.cos(Math.PI * 2 * warped))) / 2
   }
 
   function targetPosition(current: Target, seconds: number): Vec {
-    const x = current.x0 + config.wobbleAmp * (1 + seconds / config.wobbleGrow) * Math.sin(
+    // Амплитуда растёт со временем, но с потолком: иначе цель упирается в боковые края.
+    const growth = Math.min(1 + seconds / config.wobbleGrow, MAX_WOBBLE_GROWTH)
+    const x = current.x0 + config.wobbleAmp * growth * Math.sin(
       config.wobbleFreq * Math.PI * 2 * seconds + current.phase,
     )
     const y = current.y0 + verticalOffset(current.pattern, seconds)
@@ -250,6 +255,8 @@ function startSession(
 
   const stopLoop = startLoop((dt, now) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
@@ -312,9 +319,9 @@ export function createAimRecoil(): GameMode {
   return {
     id: 'aimRecoil',
     title: 'Recoil Tracking',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as AimRecoilSettings, onResult)
+      teardown = startSession(container, settings as AimRecoilSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()

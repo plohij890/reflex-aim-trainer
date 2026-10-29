@@ -1,6 +1,6 @@
 import { capturePointer, createCanvas, pointerPosition, releasePointer, startLoop } from '../engine'
 import type { AimPathSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const PATH_COLOR = '#4c9aff'
@@ -15,11 +15,42 @@ interface Vec {
   y: number
 }
 
-function buildLine(length: number): Vec[] {
+function buildHorizontal(length: number): Vec[] {
   return [
     { x: 0, y: 0 },
     { x: length, y: 0 },
   ]
+}
+
+function buildVertical(length: number): Vec[] {
+  return [
+    { x: 0, y: 0 },
+    { x: 0, y: length },
+  ]
+}
+
+function buildDiagonal(length: number): Vec[] {
+  const sign = Math.random() < 0.5 ? -1 : 1
+  const step = length / Math.SQRT2
+
+  return [
+    { x: 0, y: 0 },
+    { x: step, y: step * sign },
+  ]
+}
+
+function buildArc(length: number, curveAmount: number): Vec[] {
+  const sign = Math.random() < 0.5 ? -1 : 1
+  const angle = Math.PI * Math.min(Math.max(curveAmount, 0.2), 1)
+  const radius = length / angle
+
+  const points: Vec[] = []
+  for (let step = 0; step <= CURVE_STEPS; step += 1) {
+    const a = (angle * step) / CURVE_STEPS
+    points.push({ x: radius * Math.sin(a), y: sign * radius * (1 - Math.cos(a)) })
+  }
+
+  return points
 }
 
 function buildCurve(length: number, curveAmount: number): Vec[] {
@@ -58,18 +89,31 @@ function buildZigzag(length: number): Vec[] {
 }
 
 function pickShape(): Exclude<Shape, 'random'> {
-  const shapes: readonly Exclude<Shape, 'random'>[] = ['line', 'curve', 'zigzag']
-  return shapes[Math.floor(Math.random() * shapes.length)] ?? 'line'
+  const shapes: readonly Exclude<Shape, 'random'>[] = [
+    'horizontal',
+    'vertical',
+    'diagonal',
+    'arc',
+    'curve',
+    'zigzag',
+  ]
+  return shapes[Math.floor(Math.random() * shapes.length)] ?? 'horizontal'
 }
 
 function buildShape(shape: Exclude<Shape, 'random'>, config: AimPathSettings): Vec[] {
   switch (shape) {
+    case 'vertical':
+      return buildVertical(config.pathLength)
+    case 'diagonal':
+      return buildDiagonal(config.pathLength)
+    case 'arc':
+      return buildArc(config.pathLength, config.curveAmount)
     case 'curve':
       return buildCurve(config.pathLength, config.curveAmount)
     case 'zigzag':
       return buildZigzag(config.pathLength)
     default:
-      return buildLine(config.pathLength)
+      return buildHorizontal(config.pathLength)
   }
 }
 
@@ -103,6 +147,41 @@ function buildCumulative(points: readonly Vec[]): number[] {
   return cumulative
 }
 
+interface Projection {
+  distance: number
+  arcLength: number
+}
+
+function projectOnPath(
+  points: readonly Vec[],
+  cumulative: readonly number[],
+  cursor: Vec,
+): Projection {
+  let best: Projection = { distance: Number.POSITIVE_INFINITY, arcLength: 0 }
+
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1]
+    const to = points[index]
+    if (!from || !to) continue
+
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const lengthSq = dx * dx + dy * dy
+    const raw = lengthSq > 0 ? ((cursor.x - from.x) * dx + (cursor.y - from.y) * dy) / lengthSq : 0
+    const t = Math.min(Math.max(raw, 0), 1)
+
+    const px = from.x + dx * t
+    const py = from.y + dy * t
+    const distance = Math.hypot(cursor.x - px, cursor.y - py)
+
+    if (distance < best.distance) {
+      best = { distance, arcLength: (cumulative[index - 1] ?? 0) + Math.sqrt(lengthSq) * t }
+    }
+  }
+
+  return best
+}
+
 function pointAt(points: readonly Vec[], cumulative: readonly number[], distance: number): Vec {
   const first = points[0]
   if (!first) return { x: 0, y: 0 }
@@ -128,6 +207,7 @@ function startSession(
   container: HTMLElement,
   config: AimPathSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
@@ -285,21 +365,29 @@ function startSession(
 
   const stopLoop = startLoop((dt) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
     }
 
     if (captured && pressed && pointer) {
-      traveled += config.pathSpeed * dt
+      activeMs += dt * 1000
 
       const ball = ballPosition()
       const distance = Math.hypot(pointer.x - ball.x, pointer.y - ball.y)
 
-      activeMs += dt * 1000
       deviationSum += distance
       deviationFrames += 1
-      if (distance < config.ballRadius) onPathMs += dt * 1000
+
+      // Шарик ведёт игрок: он едет за курсором, но только пока курсор держится на нём.
+      if (distance < config.ballRadius) {
+        onPathMs += dt * 1000
+
+        const projection = projectOnPath(points, cumulative, pointer)
+        traveled = Math.max(traveled, Math.min(projection.arcLength, totalLength))
+      }
 
       if (traveled >= totalLength) {
         completed += 1
@@ -328,9 +416,9 @@ export function createAimPath(): GameMode {
   return {
     id: 'aimPath',
     title: 'Path Tracking',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as AimPathSettings, onResult)
+      teardown = startSession(container, settings as AimPathSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()

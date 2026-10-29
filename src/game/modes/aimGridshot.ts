@@ -1,6 +1,6 @@
 import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { AimGridshotSettings } from '../settings'
-import type { GameMode, GameResult } from '../types'
+import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const TARGET_COLOR = '#ef4444'
@@ -21,6 +21,7 @@ function startSession(
   container: HTMLElement,
   config: AimGridshotSettings,
   onResult: (r: GameResult) => void,
+  onProgress?: ProgressHandler,
 ): () => void {
   const { canvas, ctx, destroy } = createCanvas(container)
 
@@ -196,6 +197,8 @@ function startSession(
 
   const stopLoop = startLoop((dt) => {
     accumulated += dt
+    onProgress?.(accumulated, config.duration)
+
     if (accumulated >= config.duration) {
       finish()
       return
@@ -221,9 +224,9 @@ export function createAimGridshot(): GameMode {
   return {
     id: 'aimGridshot',
     title: 'Gridshot',
-    mount(container, settings, onResult) {
+    mount(container, settings, onResult, onProgress) {
       teardown?.()
-      teardown = startSession(container, settings as AimGridshotSettings, onResult)
+      teardown = startSession(container, settings as AimGridshotSettings, onResult, onProgress)
     },
     unmount() {
       teardown?.()
