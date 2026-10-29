@@ -132,6 +132,7 @@ function startSession(
   const { canvas, ctx, destroy } = createCanvas(container)
 
   let points: Vec[] = []
+  let localPoints: Vec[] = []
   let cumulative: number[] = []
   let totalLength = 0
   let traveled = 0
@@ -150,14 +151,26 @@ function startSession(
 
   const margin = Math.max(config.startRadius, config.ballRadius) + 10
 
-  function spawnSlider(): void {
-    const shape = config.pathShape === 'random' ? pickShape() : config.pathShape
-    const local = buildShape(shape, config)
-    points = placePoints(local, canvas.clientWidth, canvas.clientHeight, margin)
+  function placeCurrentPath(): void {
+    points = placePoints(localPoints, canvas.clientWidth, canvas.clientHeight, margin)
     cumulative = buildCumulative(points)
     totalLength = cumulative[cumulative.length - 1] ?? 0
+  }
+
+  function spawnSlider(): void {
+    const shape = config.pathShape === 'random' ? pickShape() : config.pathShape
+    localPoints = buildShape(shape, config)
+    placeCurrentPath()
     traveled = 0
     captured = false
+  }
+
+  function onResize(): void {
+    if (finished) return
+
+    // Перенос не меняет длину пути, поэтому traveled остаётся валидным.
+    placeCurrentPath()
+    render()
   }
 
   function ballPosition(): Vec {
@@ -268,6 +281,7 @@ function startSession(
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerRelease)
   window.addEventListener('pointercancel', onPointerRelease)
+  window.addEventListener('resize', onResize)
 
   const stopLoop = startLoop((dt) => {
     accumulated += dt
@@ -303,6 +317,7 @@ function startSession(
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerRelease)
     window.removeEventListener('pointercancel', onPointerRelease)
+    window.removeEventListener('resize', onResize)
     destroy()
   }
 }

@@ -37,6 +37,10 @@ function startSession(
   let finished = false
   let accumulated = 0
 
+  // Интервалы между попаданиями: первый считается от старта сессии.
+  const intervals: number[] = []
+  let lastHitAt = performance.now()
+
   function cellCenter(cellIndex: number): Point {
     const cellWidth = Math.max(0, width - PADDING * 2) / config.gridSize
     const cellHeight = Math.max(0, height - PADDING * 2) / config.gridSize
@@ -103,7 +107,9 @@ function startSession(
   function buildResult(): GameResult {
     const total = hits + misses
     const accuracy = total === 0 ? 0 : Math.round((hits / total) * 100)
-    const avgTime = hits === 0 ? '—' : `${Math.round((config.duration * 1000) / hits)} ms`
+    const avgTime = intervals.length === 0
+      ? '—'
+      : `${Math.round(intervals.reduce((sum, ms) => sum + ms, 0) / intervals.length)} ms`
 
     return {
       primary: hits === 0 ? null : hits,
@@ -124,9 +130,20 @@ function startSession(
 
     pointer = { x: event.offsetX, y: event.offsetY }
 
-    const hitIndex = targets.findIndex(
-      (target) => Math.hypot(target.x - event.offsetX, target.y - event.offsetY) < radius,
-    )
+    // При пересечении кругов берём ближайшую к клику цель, а не первую в массиве.
+    let hitIndex = -1
+    let bestDistance = Number.POSITIVE_INFINITY
+
+    for (let index = 0; index < targets.length; index += 1) {
+      const candidate = targets[index]
+      if (!candidate) continue
+
+      const distance = Math.hypot(candidate.x - event.offsetX, candidate.y - event.offsetY)
+      if (distance < radius && distance < bestDistance) {
+        bestDistance = distance
+        hitIndex = index
+      }
+    }
 
     if (hitIndex === -1) {
       misses += 1
@@ -141,6 +158,9 @@ function startSession(
     }
 
     hits += 1
+    const now = performance.now()
+    intervals.push(now - lastHitAt)
+    lastHitAt = now
     spawnTarget()
     render()
   }

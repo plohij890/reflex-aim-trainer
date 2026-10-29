@@ -122,16 +122,21 @@ function startSession(
 
   function verticalOffset(pattern: Pattern, seconds: number): number {
     const peakTime = PEAK_TAU_FACTOR * config.tau
+    const riseDistance = config.v0 * config.tau * (1 - Math.exp(-PEAK_TAU_FACTOR))
+    const rise = (time: number): number => config.v0 * config.tau * (1 - Math.exp(-time / config.tau))
 
     if (pattern === 'up') {
-      return -config.v0 * config.tau * (1 - Math.exp(-seconds / config.tau))
+      return -rise(seconds)
     }
 
-    const riseTime = Math.min(seconds, peakTime)
-    const rise = config.v0 * config.tau * (1 - Math.exp(-riseTime / config.tau))
-    const fall = seconds > peakTime ? FALL_SPEED_FACTOR * config.v0 * (seconds - peakTime) : 0
+    // up_then_down: подъём, спуск до уровня старта и новый цикл.
+    // Так цель не уходит в бесконечный минус и не залипает у нижней границы.
+    const fallSpeed = FALL_SPEED_FACTOR * config.v0
+    const cycleDuration = peakTime + riseDistance / fallSpeed
+    const cycleTime = seconds % cycleDuration
 
-    return -rise + fall
+    if (cycleTime <= peakTime) return -rise(cycleTime)
+    return -riseDistance + fallSpeed * (cycleTime - peakTime)
   }
 
   function targetPosition(current: Target, seconds: number): Vec {
@@ -151,8 +156,8 @@ function startSession(
   function drawHpBar(position: Vec, hp: number, hpMax: number): void {
     const width = canvas.clientWidth
     const x = clamp(position.x - BAR_WIDTH / 2, 2, width - BAR_WIDTH - 2)
-    // Бар не должен обрезаться сверху, если цель прижата к верхнему краю.
-    const y = Math.max(2, position.y - config.targetRadius - BAR_OFFSET)
+    // Клэмп позиции цели гарантирует место под бар сверху, дополнительный Math.max не нужен.
+    const y = position.y - config.targetRadius - BAR_OFFSET
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
     ctx.beginPath()
