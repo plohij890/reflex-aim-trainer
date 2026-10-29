@@ -1,0 +1,20 @@
+export interface GameResult {
+  primary: number
+  primaryLabel: string
+  secondary?: { label: string; value: string }[]
+  unit?: 'ms' | '%' | 'pts' | ''
+}
+
+export interface GameContext {
+  canvas: HTMLCanvasElement
+  ctx: CanvasRenderingContext2D
+  settings: unknown
+  onResult: (r: GameResult) => void
+}
+
+export interface GameMode {
+  id: string
+  title: string
+  mount(container: HTMLElement, settings: unknown, onResult: (r: GameResult) => void): void
+  unmount(): void
+}
