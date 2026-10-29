@@ -100,7 +100,7 @@ function startSession(
     const penaltyMs = penaltyAttempts * config.errorPenalty
     const totalMs = reactions.reduce((sum, ms) => sum + ms, 0) + penaltyMs
     const countedAttempts = hits + penaltyAttempts
-    const primary = hits === 0 ? 0 : Math.round(totalMs / countedAttempts)
+    const primary = hits === 0 ? null : Math.round(totalMs / countedAttempts)
 
     const accuracy = total === 0 ? 0 : Math.round((hits / total) * 100)
     const best = sorted[0]
@@ -110,7 +110,7 @@ function startSession(
       primaryLabel: 'Avg reaction',
       unit: 'ms',
       secondary: [
-        { label: 'Best', value: best === undefined ? '—' : `${Math.round(best)} ms` },
+        { label: 'Best attempt', value: best === undefined ? '—' : `${Math.round(best)} ms` },
         { label: 'Accuracy', value: `${accuracy}%` },
         { label: 'Hits', value: String(hits) },
         { label: 'Errors', value: String(errors) },

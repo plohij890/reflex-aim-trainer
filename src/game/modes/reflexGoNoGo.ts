@@ -72,7 +72,7 @@ function startSession(
   function buildResult(): GameResult {
     const hits = reactions.length
     const total = hits + misses + falseAlarms + correctRejections
-    const primary = hits === 0 ? 0 : Math.round(reactions.reduce((sum, ms) => sum + ms, 0) / hits)
+    const primary = hits === 0 ? null : Math.round(reactions.reduce((sum, ms) => sum + ms, 0) / hits)
     const accuracy = total === 0 ? 0 : Math.round(((hits + correctRejections) / total) * 100)
 
     return {

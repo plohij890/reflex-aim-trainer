@@ -55,7 +55,7 @@ function startSession(
     const penaltyMs = penaltyAttempts * config.falseStartPenalty
     const totalMs = reactions.reduce((sum, ms) => sum + ms, 0) + penaltyMs
     const countedAttempts = attempts + penaltyAttempts
-    const primary = attempts === 0 ? 0 : Math.round(totalMs / countedAttempts)
+    const primary = attempts === 0 ? null : Math.round(totalMs / countedAttempts)
 
     const best = sorted[0]
     const mid = median(sorted)
@@ -65,7 +65,7 @@ function startSession(
       primaryLabel: 'Avg reaction',
       unit: 'ms',
       secondary: [
-        { label: 'Best', value: best === undefined ? '—' : `${Math.round(best)} ms` },
+        { label: 'Best attempt', value: best === undefined ? '—' : `${Math.round(best)} ms` },
         { label: 'Median', value: mid === undefined ? '—' : `${Math.round(mid)} ms` },
         { label: 'Attempts', value: String(attempts) },
         { label: 'False starts', value: String(falseStarts) },

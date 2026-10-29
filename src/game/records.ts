@@ -17,6 +17,8 @@ export interface ModeRecord {
 
 export type Records = Partial<Record<ModeId, ModeRecord>>
 
+export type RecordDirection = 'higher-is-better' | 'lower-is-better'
+
 const KEY = 'records:v1'
 
 export function loadRecords(): Records {
@@ -26,7 +28,7 @@ export function loadRecords(): Records {
 export function saveRecord(
   id: ModeId,
   value: number,
-  direction: 'higher-is-better' | 'lower-is-better',
+  direction: RecordDirection,
 ): ModeRecord {
   const records = loadRecords()
   const prev = records[id]

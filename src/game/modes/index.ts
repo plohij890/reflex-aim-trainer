@@ -1,5 +1,5 @@
 import type { Route, Tab } from '../../router'
-import type { ModeId } from '../records'
+import type { ModeId, RecordDirection } from '../records'
 import type { GameMode } from '../types'
 import { createReflexSimple } from './reflexSimple'
 import { createReflexChoice } from './reflexChoice'
@@ -14,6 +14,7 @@ export interface ModeInfo {
   tab: Tab
   title: string
   description: string
+  direction: RecordDirection
 }
 
 const MODE_LIST: readonly ModeInfo[] = [
@@ -23,6 +24,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'reflex',
     title: 'Simple Reaction',
     description: 'Кликни, как только изменится цвет. Тренирует чистую скорость реакции.',
+    direction: 'lower-is-better',
   },
   {
     id: 'reflexChoice',
@@ -30,6 +32,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'reflex',
     title: 'Choice Reaction',
     description: 'Подсветилась зона — кликни по ней. Реакция с выбором.',
+    direction: 'lower-is-better',
   },
   {
     id: 'reflexGoNoGo',
@@ -37,6 +40,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'reflex',
     title: 'Go / No-Go',
     description: 'Кликай только на зелёные стимулы. Тренирует торможение.',
+    direction: 'lower-is-better',
   },
   {
     id: 'aimGridshot',
@@ -44,6 +48,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'aim',
     title: 'Gridshot',
     description: 'Статичные цели по сетке. Скорость + точность.',
+    direction: 'higher-is-better',
   },
   {
     id: 'aimPath',
@@ -51,6 +56,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'aim',
     title: 'Path Tracking',
     description: 'Веди шарик по линии, не отпуская ЛКМ. Плавность руки.',
+    direction: 'higher-is-better',
   },
   {
     id: 'aimRecoil',
@@ -58,6 +64,7 @@ const MODE_LIST: readonly ModeInfo[] = [
     tab: 'aim',
     title: 'Recoil Tracking',
     description: 'Держи прицел на движущейся цели и сжигай её HP. Spray control.',
+    direction: 'higher-is-better',
   },
 ]
 

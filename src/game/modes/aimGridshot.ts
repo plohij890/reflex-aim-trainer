@@ -107,7 +107,7 @@ function startSession(
     const avgTime = hits === 0 ? '—' : `${Math.round((config.duration * 1000) / hits)} ms`
 
     return {
-      primary: hits,
+      primary: hits === 0 ? null : hits,
       primaryLabel: 'Hits',
       unit: 'pts',
       secondary: [

@@ -1,5 +1,5 @@
 export interface GameResult {
-  primary: number
+  primary: number | null
   primaryLabel: string
   secondary?: { label: string; value: string }[]
   unit?: 'ms' | '%' | 'pts' | ''

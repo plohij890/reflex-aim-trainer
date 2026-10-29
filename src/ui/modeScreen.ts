@@ -12,7 +12,9 @@ export function disposeModeScreen(): void {
   activeDispose = null
 }
 
-function formatValue(value: number, unit: GameResult['unit']): string {
+function formatValue(value: number | null, unit: GameResult['unit']): string {
+  if (value === null) return '—'
+
   switch (unit) {
     case 'ms':
       return `${Math.round(value)} ms`
@@ -64,7 +66,7 @@ function renderResultContent(result: GameResult | null, modeId: ModeId): Documen
   if (best !== undefined) {
     const bestLine = document.createElement('p')
     bestLine.className = 'result-best'
-    bestLine.textContent = `Best: ${formatValue(best.best, result.unit)}`
+    bestLine.textContent = `Record: ${formatValue(best.best, result.unit)}`
     fragment.append(bestLine)
   }
 
@@ -91,7 +93,7 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
   const info = getModeInfo(modeId)
   if (!info) return
 
-  const { tab, title } = info
+  const { tab, title, direction } = info
 
   disposeModeScreen()
 
@@ -200,7 +202,11 @@ export function renderModeScreen(container: HTMLElement, modeId: ModeId): void {
 
   function handleResult(r: GameResult): void {
     teardown()
-    saveRecord(modeId, r.primary, r.unit === 'ms' ? 'lower-is-better' : 'higher-is-better')
+
+    if (r.primary !== null) {
+      saveRecord(modeId, r.primary, direction)
+    }
+
     result = r
     showResult()
   }
