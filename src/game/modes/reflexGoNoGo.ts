@@ -1,4 +1,4 @@
-import { createCanvas, startLoop } from '../engine'
+import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { ReflexGoNoGoSettings } from '../settings'
 import type { GameMode, GameResult } from '../types'
 
@@ -32,8 +32,7 @@ function startSession(
   let current: Stimulus | null = null
   let pauseUntil = 0
   let finished = false
-
-  const endsAt = performance.now() + config.duration * 1000
+  let accumulated = 0
 
   function randomPause(): number {
     return PAUSE_MIN + Math.random() * (PAUSE_MAX - PAUSE_MIN)
@@ -88,8 +87,10 @@ function startSession(
     }
   }
 
-  function onPointerDown(): void {
+  function onPointerDown(event: PointerEvent): void {
     if (finished || current === null) return
+
+    capturePointer(canvas, event)
 
     const now = performance.now()
     // Клик после закрытия окна не засчитываем: miss уже посчитает RAF-цикл.
@@ -108,6 +109,10 @@ function startSession(
     render()
   }
 
+  function onPointerRelease(event: PointerEvent): void {
+    releasePointer(canvas, event)
+  }
+
   function finish(): void {
     if (finished) return
     finished = true
@@ -117,8 +122,16 @@ function startSession(
 
   pauseUntil = performance.now() + randomPause()
   canvas.addEventListener('pointerdown', onPointerDown)
+  canvas.addEventListener('pointerup', onPointerRelease)
+  canvas.addEventListener('pointercancel', onPointerRelease)
 
-  const stopLoop = startLoop((_dt, now) => {
+  const stopLoop = startLoop((dt, now) => {
+    accumulated += dt
+    if (accumulated >= config.duration) {
+      finish()
+      return
+    }
+
     if (current && now - current.shownAt >= config.responseWindow) {
       if (!current.responded) {
         if (current.type === 'go') misses += 1
@@ -126,11 +139,6 @@ function startSession(
       }
       current = null
       pauseUntil = now + randomPause()
-    }
-
-    if (now >= endsAt) {
-      finish()
-      return
     }
 
     if (current === null && now >= pauseUntil) {
@@ -146,6 +154,8 @@ function startSession(
     finished = true
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
+    canvas.removeEventListener('pointerup', onPointerRelease)
+    canvas.removeEventListener('pointercancel', onPointerRelease)
     destroy()
   }
 }

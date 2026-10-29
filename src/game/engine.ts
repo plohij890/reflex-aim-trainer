@@ -34,6 +34,29 @@ export function createCanvas(container: HTMLElement): {
   }
 }
 
+export function capturePointer(canvas: HTMLCanvasElement, event: PointerEvent): void {
+  // Синтетические события и потерянные указатели не имеют активного pointerId.
+  try {
+    canvas.setPointerCapture(event.pointerId)
+  } catch {
+    // Без захвата события всё равно придут, пока курсор над canvas.
+  }
+}
+
+export function pointerPosition(canvas: HTMLCanvasElement, event: PointerEvent): { x: number; y: number } {
+  // offsetX/offsetY считаются от target'а события; на window-слушателе target может быть любым.
+  const rect = canvas.getBoundingClientRect()
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+}
+
+export function releasePointer(canvas: HTMLCanvasElement, event: PointerEvent): void {
+  try {
+    canvas.releasePointerCapture(event.pointerId)
+  } catch {
+    // Указатель мог быть уже освобождён (pointercancel) — это не ошибка.
+  }
+}
+
 export function startLoop(cb: (dt: number, now: number) => void): () => void {
   let raf = 0
   let prev = performance.now()

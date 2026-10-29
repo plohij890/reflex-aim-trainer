@@ -1,4 +1,4 @@
-import { createCanvas, startLoop } from '../engine'
+import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { ReflexChoiceSettings } from '../settings'
 import type { GameMode, GameResult } from '../types'
 
@@ -64,8 +64,7 @@ function startSession(
   let nextStimulusAt = 0
   let activeZone = 0
   let finished = false
-
-  const endsAt = performance.now() + config.duration * 1000
+  let accumulated = 0
 
   function scheduleNext(now: number): void {
     phase = 'waiting'
@@ -121,6 +120,8 @@ function startSession(
   function onPointerDown(event: PointerEvent): void {
     if (finished) return
 
+    capturePointer(canvas, event)
+
     const now = performance.now()
 
     if (phase === 'waiting') {
@@ -143,6 +144,10 @@ function startSession(
     render()
   }
 
+  function onPointerRelease(event: PointerEvent): void {
+    releasePointer(canvas, event)
+  }
+
   function finish(): void {
     if (finished) return
     finished = true
@@ -152,9 +157,12 @@ function startSession(
 
   scheduleNext(performance.now())
   canvas.addEventListener('pointerdown', onPointerDown)
+  canvas.addEventListener('pointerup', onPointerRelease)
+  canvas.addEventListener('pointercancel', onPointerRelease)
 
-  const stopLoop = startLoop((_dt, now) => {
-    if (now >= endsAt) {
+  const stopLoop = startLoop((dt, now) => {
+    accumulated += dt
+    if (accumulated >= config.duration) {
       finish()
       return
     }
@@ -172,6 +180,8 @@ function startSession(
     finished = true
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
+    canvas.removeEventListener('pointerup', onPointerRelease)
+    canvas.removeEventListener('pointercancel', onPointerRelease)
     destroy()
   }
 }

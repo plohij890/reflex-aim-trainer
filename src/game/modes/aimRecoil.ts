@@ -1,4 +1,4 @@
-import { createCanvas, startLoop } from '../engine'
+import { capturePointer, createCanvas, pointerPosition, releasePointer, startLoop } from '../engine'
 import type { AimRecoilSettings } from '../settings'
 import type { GameMode, GameResult } from '../types'
 
@@ -85,8 +85,10 @@ function startSession(
   let activeMs = 0
   let onTargetMs = 0
   let finished = false
-
-  const endsAt = performance.now() + config.duration * 1000
+  let accumulated = 0
+  // Время с момента захвата, накопленное по dt: сворачивание вкладки не двигает цель и не жжёт HP.
+  let capturedTime = 0
+  let captureFirstFrame = false
 
   function spawnTarget(now: number): void {
     const pattern = pickPattern(config)
@@ -146,10 +148,6 @@ function startSession(
     }
   }
 
-  function secondsSinceCapture(current: Target, now: number): number {
-    return current.capturedAt === null ? 0 : (now - current.capturedAt) / 1000
-  }
-
   function drawHpBar(position: Vec, hp: number, hpMax: number): void {
     const width = canvas.clientWidth
     const x = clamp(position.x - BAR_WIDTH / 2, 2, width - BAR_WIDTH - 2)
@@ -170,7 +168,7 @@ function startSession(
     ctx.fill()
   }
 
-  function render(now: number): void {
+  function render(seconds: number): void {
     const width = canvas.clientWidth
     const height = canvas.clientHeight
 
@@ -179,7 +177,7 @@ function startSession(
 
     if (!target) return
 
-    const position = targetPosition(target, secondsSinceCapture(target, now))
+    const position = targetPosition(target, seconds)
 
     ctx.fillStyle = TARGET_COLOR
     ctx.beginPath()
@@ -208,7 +206,9 @@ function startSession(
   function onPointerDown(event: PointerEvent): void {
     if (finished) return
 
-    pointer = { x: event.offsetX, y: event.offsetY }
+    capturePointer(canvas, event)
+
+    pointer = pointerPosition(canvas, event)
     pressed = true
 
     if (!target || target.capturedAt !== null) return
@@ -216,14 +216,17 @@ function startSession(
     const position = targetPosition(target, 0)
     if (Math.hypot(pointer.x - position.x, pointer.y - position.y) < config.targetRadius) {
       target.capturedAt = performance.now()
+      capturedTime = 0
+      captureFirstFrame = true
     }
   }
 
   function onPointerMove(event: PointerEvent): void {
-    pointer = { x: event.offsetX, y: event.offsetY }
+    pointer = pointerPosition(canvas, event)
   }
 
-  function onPointerUp(): void {
+  function onPointerRelease(event: PointerEvent): void {
+    releasePointer(canvas, event)
     pressed = false
   }
 
@@ -236,57 +239,64 @@ function startSession(
 
   spawnTarget(performance.now())
   canvas.addEventListener('pointerdown', onPointerDown)
-  canvas.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerRelease)
+  window.addEventListener('pointercancel', onPointerRelease)
 
   const stopLoop = startLoop((dt, now) => {
-    if (now >= endsAt) {
+    accumulated += dt
+    if (accumulated >= config.duration) {
       finish()
       return
     }
 
     if (!target) {
       if (now >= nextSpawnAt) spawnTarget(now)
-      render(now)
+      render(capturedTime)
       return
     }
 
     if (target.capturedAt !== null) {
-      const seconds = (now - target.capturedAt) / 1000
-      const position = targetPosition(target, seconds)
+      // Первый кадр после захвата: не списываем время, прошедшее до клика.
+      const frame = captureFirstFrame ? Math.min((now - target.capturedAt) / 1000, dt) : dt
+      captureFirstFrame = false
+      capturedTime += frame
+
+      const position = targetPosition(target, capturedTime)
 
       if (pressed && pointer) {
-        activeMs += dt * 1000
+        activeMs += frame * 1000
 
         const distance = Math.hypot(pointer.x - position.x, pointer.y - position.y)
         if (distance < config.targetRadius) {
-          onTargetMs += dt * 1000
-          target.hp -= config.dps * dt
+          onTargetMs += frame * 1000
+          target.hp -= config.dps * frame
         }
       }
 
       if (target.hp <= 0) {
         kills += 1
-        ttkSum += now - target.capturedAt
+        ttkSum += capturedTime * 1000
         ttkCount += 1
         target = null
         nextSpawnAt = now + config.respawnDelay * 1000
-      } else if (config.lifetime > 0 && seconds > config.lifetime) {
+      } else if (config.lifetime > 0 && capturedTime > config.lifetime) {
         misses += 1
         target = null
         nextSpawnAt = now + config.respawnDelay * 1000
       }
     }
 
-    render(now)
+    render(capturedTime)
   })
 
   return () => {
     finished = true
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
-    canvas.removeEventListener('pointermove', onPointerMove)
-    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerRelease)
+    window.removeEventListener('pointercancel', onPointerRelease)
     destroy()
   }
 }

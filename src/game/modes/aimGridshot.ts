@@ -1,4 +1,4 @@
-import { createCanvas, startLoop } from '../engine'
+import { capturePointer, createCanvas, releasePointer, startLoop } from '../engine'
 import type { AimGridshotSettings } from '../settings'
 import type { GameMode, GameResult } from '../types'
 
@@ -35,8 +35,7 @@ function startSession(
   let width = canvas.clientWidth
   let height = canvas.clientHeight
   let finished = false
-
-  const endsAt = performance.now() + config.duration * 1000
+  let accumulated = 0
 
   function cellCenter(cellIndex: number): Point {
     const cellWidth = Math.max(0, width - PADDING * 2) / config.gridSize
@@ -121,6 +120,8 @@ function startSession(
   function onPointerDown(event: PointerEvent): void {
     if (finished) return
 
+    capturePointer(canvas, event)
+
     pointer = { x: event.offsetX, y: event.offsetY }
 
     const hitIndex = targets.findIndex(
@@ -148,6 +149,15 @@ function startSession(
     pointer = { x: event.offsetX, y: event.offsetY }
   }
 
+  function onPointerRelease(event: PointerEvent): void {
+    releasePointer(canvas, event)
+  }
+
+  function onPointerCancel(event: PointerEvent): void {
+    releasePointer(canvas, event)
+    pointer = null
+  }
+
   function finish(): void {
     if (finished) return
     finished = true
@@ -157,13 +167,16 @@ function startSession(
 
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
+  canvas.addEventListener('pointerup', onPointerRelease)
+  canvas.addEventListener('pointercancel', onPointerCancel)
 
   for (let index = 0; index < config.targets; index += 1) {
     spawnTarget()
   }
 
-  const stopLoop = startLoop((_dt, now) => {
-    if (now >= endsAt) {
+  const stopLoop = startLoop((dt) => {
+    accumulated += dt
+    if (accumulated >= config.duration) {
       finish()
       return
     }
@@ -176,6 +189,8 @@ function startSession(
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
     canvas.removeEventListener('pointermove', onPointerMove)
+    canvas.removeEventListener('pointerup', onPointerRelease)
+    canvas.removeEventListener('pointercancel', onPointerCancel)
     destroy()
   }
 }

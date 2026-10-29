@@ -1,4 +1,4 @@
-import { createCanvas, startLoop } from '../engine'
+import { capturePointer, createCanvas, pointerPosition, releasePointer, startLoop } from '../engine'
 import type { AimPathSettings } from '../settings'
 import type { GameMode, GameResult } from '../types'
 
@@ -146,8 +146,8 @@ function startSession(
   let deviationSum = 0
   let deviationFrames = 0
   let finished = false
+  let accumulated = 0
 
-  const endsAt = performance.now() + config.duration * 1000
   const margin = Math.max(config.startRadius, config.ballRadius) + 10
 
   function spawnSlider(): void {
@@ -221,7 +221,9 @@ function startSession(
   function onPointerDown(event: PointerEvent): void {
     if (finished) return
 
-    pointer = { x: event.offsetX, y: event.offsetY }
+    capturePointer(canvas, event)
+
+    pointer = pointerPosition(canvas, event)
     pressed = true
 
     if (captured) return
@@ -233,19 +235,25 @@ function startSession(
     }
   }
 
-  function onPointerUp(): void {
+  function onPointerRelease(event: PointerEvent): void {
+    releasePointer(canvas, event)
+
     if (!pressed) return
     pressed = false
 
-    if (captured) {
-      captured = false
-      broken += 1
-      spawnSlider()
-    }
+    if (!captured) return
+
+    captured = false
+
+    // Отпускание ровно на финише — это завершение, а не обрыв.
+    if (traveled >= totalLength - 1) completed += 1
+    else broken += 1
+
+    spawnSlider()
   }
 
   function onPointerMove(event: PointerEvent): void {
-    pointer = { x: event.offsetX, y: event.offsetY }
+    pointer = pointerPosition(canvas, event)
   }
 
   function finish(): void {
@@ -257,11 +265,13 @@ function startSession(
 
   spawnSlider()
   canvas.addEventListener('pointerdown', onPointerDown)
-  canvas.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerRelease)
+  window.addEventListener('pointercancel', onPointerRelease)
 
-  const stopLoop = startLoop((dt, now) => {
-    if (now >= endsAt) {
+  const stopLoop = startLoop((dt) => {
+    accumulated += dt
+    if (accumulated >= config.duration) {
       finish()
       return
     }
@@ -290,8 +300,9 @@ function startSession(
     finished = true
     stopLoop()
     canvas.removeEventListener('pointerdown', onPointerDown)
-    canvas.removeEventListener('pointermove', onPointerMove)
-    window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerRelease)
+    window.removeEventListener('pointercancel', onPointerRelease)
     destroy()
   }
 }
