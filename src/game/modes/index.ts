@@ -6,6 +6,7 @@ import { createReflexChoice } from './reflexChoice'
 import { createReflexGoNoGo } from './reflexGoNoGo'
 import { createAimGridshot } from './aimGridshot'
 import { createAimPath } from './aimPath'
+import { createAimRecoil } from './aimRecoil'
 
 export interface ModeInfo {
   id: ModeId
@@ -82,6 +83,7 @@ const MODE_FACTORIES: Partial<Record<ModeId, () => GameMode>> = {
   reflexGoNoGo: createReflexGoNoGo,
   aimGridshot: createAimGridshot,
   aimPath: createAimPath,
+  aimRecoil: createAimRecoil,
 }
 
 const instances = new Map<ModeId, GameMode>()
