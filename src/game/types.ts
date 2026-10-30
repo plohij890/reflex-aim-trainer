@@ -5,13 +5,6 @@ export interface GameResult {
   unit?: 'ms' | '%' | 'pts' | ''
 }
 
-export interface GameContext {
-  canvas: HTMLCanvasElement
-  ctx: CanvasRenderingContext2D
-  settings: unknown
-  onResult: (r: GameResult) => void
-}
-
 export type ProgressHandler = (elapsed: number, duration: number) => void
 
 export interface GameMode {

@@ -92,7 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   aimRecoil: {
     duration: 30,
-    targetRadius: 40,
+    targetRadius: 20,
     hp: 100,
     dps: 50,
     lifetime: 10,

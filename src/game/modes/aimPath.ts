@@ -4,9 +4,11 @@ import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const PATH_COLOR = '#4c9aff'
+const BREAK_COLOR = '#ef4444'
 const BALL_COLOR = '#22c55e'
 const CURVE_STEPS = 48
 const END_DOT_RADIUS = 5
+const BREAK_FLASH = 0.2
 
 type Shape = AimPathSettings['pathShape']
 
@@ -228,6 +230,8 @@ function startSession(
   let deviationFrames = 0
   let finished = false
   let accumulated = 0
+  // Секунды, оставшиеся до конца красной вспышки после обрыва слайдера.
+  let breakFlashLeft = 0
 
   const margin = Math.max(config.startRadius, config.ballRadius) + 10
 
@@ -268,7 +272,10 @@ function startSession(
     const end = points[points.length - 1]
     if (!start || !end) return
 
-    ctx.strokeStyle = PATH_COLOR
+    const flashing = breakFlashLeft > 0
+    const pathColor = flashing ? BREAK_COLOR : PATH_COLOR
+
+    ctx.strokeStyle = pathColor
     ctx.lineWidth = 6
     ctx.lineJoin = 'round'
     ctx.beginPath()
@@ -283,10 +290,13 @@ function startSession(
     ctx.arc(start.x, start.y, config.startRadius, 0, Math.PI * 2)
     ctx.stroke()
 
-    ctx.fillStyle = PATH_COLOR
+    ctx.fillStyle = pathColor
     ctx.beginPath()
     ctx.arc(end.x, end.y, END_DOT_RADIUS, 0, Math.PI * 2)
     ctx.fill()
+
+    // Во время вспышки слайдер уже оборван — шарик не показываем.
+    if (flashing) return
 
     const ball = ballPosition()
     ctx.fillStyle = BALL_COLOR
@@ -319,7 +329,8 @@ function startSession(
     pointer = pointerPosition(canvas, event)
     pressed = true
 
-    if (captured) return
+    // Пока идёт вспышка обрыва, слайдер уже мёртв — захватывать нечего.
+    if (captured || breakFlashLeft > 0) return
 
     const start = points[0]
     if (start && Math.hypot(pointer.x - start.x, pointer.y - start.y) < config.startRadius) {
@@ -339,10 +350,14 @@ function startSession(
     captured = false
 
     // Отпускание ровно на финише — это завершение, а не обрыв.
-    if (traveled >= totalLength - 1) completed += 1
-    else broken += 1
+    if (traveled >= totalLength - 1) {
+      completed += 1
+      spawnSlider()
+      return
+    }
 
-    spawnSlider()
+    broken += 1
+    breakFlashLeft = BREAK_FLASH
   }
 
   function onPointerMove(event: PointerEvent): void {
@@ -370,6 +385,11 @@ function startSession(
     if (accumulated >= config.duration) {
       finish()
       return
+    }
+
+    if (breakFlashLeft > 0) {
+      breakFlashLeft -= dt
+      if (breakFlashLeft <= 0) spawnSlider()
     }
 
     if (captured && pressed && pointer) {

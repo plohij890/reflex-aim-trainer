@@ -21,9 +21,9 @@ function formatValue(value: number | null, unit: GameResult['unit']): string {
     case '%':
       return `${Math.round(value * 10) / 10}%`
     case 'pts':
-      return `${Math.round(value * 10) / 10} pts`
+      return `${Math.round(value)} pts`
     default:
-      return `${Math.round(value * 100) / 100}`
+      return `${Math.round(value)}`
   }
 }
 

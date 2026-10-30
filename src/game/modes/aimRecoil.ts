@@ -4,6 +4,11 @@ import type { GameMode, GameResult, ProgressHandler } from '../types'
 
 const BACKGROUND = '#101014'
 const TARGET_COLOR = '#e6edf3'
+const TARGET_ACTIVE_COLOR = '#4ade80'
+const TARGET_RING = '#3a4557'
+const TARGET_ACTIVE_RING = '#22c55e'
+const IDLE_RING_WIDTH = 2
+const ACTIVE_RING_WIDTH = 5
 const BAR_WIDTH = 60
 const BAR_HEIGHT = 6
 const BAR_RADIUS = 3
@@ -193,13 +198,21 @@ function startSession(
     if (!target) return
 
     const position = targetPosition(target, seconds)
+    const captured = target.capturedAt !== null
 
-    ctx.fillStyle = TARGET_COLOR
+    // Захваченная цель подсвечивается и получает толстую обводку — видно, что она «активна».
+    ctx.fillStyle = captured ? TARGET_ACTIVE_COLOR : TARGET_COLOR
     ctx.beginPath()
     ctx.arc(position.x, position.y, config.targetRadius, 0, Math.PI * 2)
     ctx.fill()
 
-    if (target.capturedAt !== null) drawHpBar(position, target.hp, target.hpMax)
+    ctx.strokeStyle = captured ? TARGET_ACTIVE_RING : TARGET_RING
+    ctx.lineWidth = captured ? ACTIVE_RING_WIDTH : IDLE_RING_WIDTH
+    ctx.beginPath()
+    ctx.arc(position.x, position.y, config.targetRadius, 0, Math.PI * 2)
+    ctx.stroke()
+
+    if (captured) drawHpBar(position, target.hp, target.hpMax)
   }
 
   function buildResult(): GameResult {
