@@ -9,10 +9,11 @@ const NO_GO_COLOR = '#ef4444'
 const PAUSE_MIN = 700
 const PAUSE_MAX = 1500
 const MAX_NO_GO_STREAK = 3
+// Разрыв между кадрами больше этого значения считаем сворачиванием вкладки.
+const HIDDEN_GAP_MS = 500
 
 interface Stimulus {
   type: 'go' | 'nogo'
-  shownAt: number
   responded: boolean
 }
 
@@ -31,18 +32,34 @@ function startSession(
   let noGoStreak = 0
 
   let current: Stimulus | null = null
-  let pauseUntil = 0
+  // Оба таймера в секундах и уменьшаются на dt: сворачивание вкладки их не двигает.
+  let windowLeft = 0
+  let pauseLeft = 0
+  let stimulusAt = 0
   let finished = false
   let accumulated = 0
 
   function randomPause(): number {
-    return PAUSE_MIN + Math.random() * (PAUSE_MAX - PAUSE_MIN)
+    return (PAUSE_MIN + Math.random() * (PAUSE_MAX - PAUSE_MIN)) / 1000
   }
 
   function pickType(): Stimulus['type'] {
     const wantsNoGo = Math.random() < config.noGoRatio
     if (wantsNoGo && noGoStreak < MAX_NO_GO_STREAK) return 'nogo'
     return 'go'
+  }
+
+  function showStimulus(now: number): void {
+    const type = pickType()
+    noGoStreak = type === 'nogo' ? noGoStreak + 1 : 0
+    current = { type, responded: false }
+    stimulusAt = now
+    windowLeft = config.responseWindow / 1000
+  }
+
+  function closeStimulus(): void {
+    current = null
+    pauseLeft = randomPause()
   }
 
   function render(): void {
@@ -94,19 +111,19 @@ function startSession(
     capturePointer(canvas, event)
 
     const now = performance.now()
-    // Клик после закрытия окна не засчитываем: miss уже посчитает RAF-цикл.
-    if (now - current.shownAt >= config.responseWindow) return
+
+    // Окно уже закрылось в этом кадре: промах посчитает RAF-цикл, клик игнорируем.
+    if (windowLeft <= 0) return
 
     current.responded = true
 
     if (current.type === 'go') {
-      reactions.push(now - current.shownAt)
+      reactions.push(now - stimulusAt)
     } else {
       falseAlarms += 1
     }
 
-    current = null
-    pauseUntil = now + randomPause()
+    closeStimulus()
     render()
   }
 
@@ -121,10 +138,12 @@ function startSession(
     onResult(buildResult())
   }
 
-  pauseUntil = performance.now() + randomPause()
+  pauseLeft = randomPause()
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointerup', onPointerRelease)
   canvas.addEventListener('pointercancel', onPointerRelease)
+
+  let lastFrameAt = performance.now()
 
   const stopLoop = startLoop((dt, now) => {
     accumulated += dt
@@ -135,19 +154,24 @@ function startSession(
       return
     }
 
-    if (current && now - current.shownAt >= config.responseWindow) {
-      if (!current.responded) {
-        if (current.type === 'go') misses += 1
-        else correctRejections += 1
-      }
-      current = null
-      pauseUntil = now + randomPause()
-    }
+    // Большой разрыв между кадрами = вкладка была свёрнута: реакцию считаем с момента возврата.
+    const gap = now - lastFrameAt
+    lastFrameAt = now
+    if (current && gap > HIDDEN_GAP_MS) stimulusAt = now
 
-    if (current === null && now >= pauseUntil) {
-      const type = pickType()
-      noGoStreak = type === 'nogo' ? noGoStreak + 1 : 0
-      current = { type, shownAt: now, responded: false }
+    if (current) {
+      windowLeft -= dt
+
+      if (windowLeft <= 0) {
+        if (!current.responded) {
+          if (current.type === 'go') misses += 1
+          else correctRejections += 1
+        }
+        closeStimulus()
+      }
+    } else {
+      pauseLeft -= dt
+      if (pauseLeft <= 0) showStimulus(now)
     }
 
     render()

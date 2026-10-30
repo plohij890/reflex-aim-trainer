@@ -77,7 +77,8 @@ function startSession(
   const { canvas, ctx, destroy } = createCanvas(container)
 
   let target: Target | null = null
-  let nextSpawnAt = 0
+  // Секунды до следующего спавна, уменьшаются на dt: на свёрнутой вкладке пауза не тикает.
+  let respawnLeft = 0
   let pressed = false
   let pointer: Vec | null = null
 
@@ -267,7 +268,8 @@ function startSession(
     }
 
     if (!target) {
-      if (now >= nextSpawnAt) spawnTarget(now)
+      respawnLeft -= dt
+      if (respawnLeft <= 0) spawnTarget(now)
       render(0)
       return
     }
@@ -295,11 +297,11 @@ function startSession(
         ttkSum += capturedTime * 1000
         ttkCount += 1
         target = null
-        nextSpawnAt = now + config.respawnDelay * 1000
+        respawnLeft = config.respawnDelay
       } else if (config.lifetime > 0 && capturedTime > config.lifetime) {
         misses += 1
         target = null
-        nextSpawnAt = now + config.respawnDelay * 1000
+        respawnLeft = config.respawnDelay
       }
     }
 

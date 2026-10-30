@@ -21,8 +21,31 @@ export type RecordDirection = 'higher-is-better' | 'lower-is-better'
 
 const KEY = 'records:v1'
 
+// Режимы с временем реакции (direction: 'lower-is-better' в ModeInfo):
+// рекорд 0 ms — след старого бага, когда пустая сессия писала primary = 0.
+const TIME_MODE_IDS: readonly ModeId[] = ['reflexSimple', 'reflexChoice', 'reflexGoNoGo']
+
+function isBrokenRecord(id: ModeId, record: ModeRecord): boolean {
+  if (!Number.isFinite(record.best)) return true
+  return TIME_MODE_IDS.includes(id) && record.best <= 0
+}
+
 export function loadRecords(): Records {
-  return get<Records | null>(KEY, {}) ?? {}
+  const stored = get<Records | null>(KEY, {}) ?? {}
+  const cleaned: Records = {}
+  let changed = false
+
+  for (const [id, record] of Object.entries(stored) as [ModeId, ModeRecord][]) {
+    if (isBrokenRecord(id, record)) {
+      changed = true
+      continue
+    }
+
+    cleaned[id] = record
+  }
+
+  if (changed) set(KEY, cleaned)
+  return cleaned
 }
 
 export function saveRecord(
