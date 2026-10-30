@@ -111,6 +111,10 @@ function startSession(
       ? Math.max(config.targetRadius + barSpace, height / 2)
       : top + Math.random() * (bottom - top)
 
+    // Новую цель рисуем и проверяем на попадание при seconds = 0, поэтому время захвата сбрасываем.
+    capturedTime = 0
+    captureFirstFrame = false
+
     target = {
       x0: margin + Math.random() * Math.max(0, width - margin * 2),
       y0,
@@ -264,7 +268,7 @@ function startSession(
 
     if (!target) {
       if (now >= nextSpawnAt) spawnTarget(now)
-      render(capturedTime)
+      render(0)
       return
     }
 
@@ -299,7 +303,7 @@ function startSession(
       }
     }
 
-    render(capturedTime)
+    render(target === null || target.capturedAt === null ? 0 : capturedTime)
   })
 
   return () => {

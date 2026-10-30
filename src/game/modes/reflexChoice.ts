@@ -16,6 +16,10 @@ const DELAY_MIN = 800
 const DELAY_MAX = 2000
 const HOME_RADIUS_MIN = 48
 const HOME_RADIUS_RATIO = 0.16
+const ZONES_BOOST_AT = 15
+const BOOSTED_ZONES = 8
+
+type LayoutCount = ReflexChoiceSettings['zones'] | typeof BOOSTED_ZONES
 
 interface Rect {
   x: number
@@ -29,13 +33,14 @@ interface Vec {
   y: number
 }
 
-const GRID: Record<ReflexChoiceSettings['zones'], { rows: number; cols: number }> = {
+const GRID: Record<LayoutCount, { rows: number; cols: number }> = {
   2: { rows: 1, cols: 2 },
   4: { rows: 2, cols: 2 },
   6: { rows: 2, cols: 3 },
+  8: { rows: 2, cols: 4 },
 }
 
-function layoutZones(width: number, height: number, count: ReflexChoiceSettings['zones']): Rect[] {
+function layoutZones(width: number, height: number, count: LayoutCount): Rect[] {
   const { rows, cols } = GRID[count]
   const innerWidth = Math.max(0, width - PADDING * 2)
   const innerHeight = Math.max(0, height - PADDING * 2)
@@ -97,6 +102,10 @@ function startSession(
     return Math.hypot(point.x - center.x, point.y - center.y) <= center.radius
   }
 
+  function zoneCount(): LayoutCount {
+    return accumulated >= ZONES_BOOST_AT ? BOOSTED_ZONES : config.zones
+  }
+
   function scheduleNext(now: number): void {
     phase = 'waiting'
     nextStimulusAt = now + DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN)
@@ -109,7 +118,7 @@ function startSession(
     ctx.fillStyle = BACKGROUND
     ctx.fillRect(0, 0, width, height)
 
-    const zones = layoutZones(width, height, config.zones)
+    const zones = layoutZones(width, height, zoneCount())
     for (let index = 0; index < zones.length; index += 1) {
       const zone = zones[index]
       if (!zone) continue
@@ -186,7 +195,7 @@ function startSession(
       return
     }
 
-    const zones = layoutZones(canvas.clientWidth, canvas.clientHeight, config.zones)
+    const zones = layoutZones(canvas.clientWidth, canvas.clientHeight, zoneCount())
     const zone = zones[activeZone]
 
     if (zone && !isHome(pointer) && contains(zone, pointer.x, pointer.y)) {
@@ -228,13 +237,17 @@ function startSession(
       return
     }
 
-    // Следующий стимул появляется только после возврата курсора в стартовую зону.
+    // Стимул появляется только пока курсор держится в стартовой зоне.
     if (phase === 'return' && isHome(pointer)) {
       scheduleNext(now)
-    } else if (phase === 'waiting' && now >= nextStimulusAt) {
-      phase = 'stimulus'
-      stimulusAt = now
-      activeZone = Math.floor(Math.random() * config.zones)
+    } else if (phase === 'waiting') {
+      if (!isHome(pointer)) {
+        phase = 'return'
+      } else if (now >= nextStimulusAt) {
+        phase = 'stimulus'
+        stimulusAt = now
+        activeZone = Math.floor(Math.random() * zoneCount())
+      }
     }
 
     render()
